@@ -1,0 +1,53 @@
+{
+  "name": "next-streaming-amplify",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "agent:build": "uv --directory agent-runtime run --frozen python -m compileall app.py request_context.py tools",
+    "agent:typecheck": "uv --directory agent-runtime run --frozen python -m compileall app.py request_context.py tools",
+    "amplify:sandbox:payments": "sh scripts/sandbox-payments.sh",
+    "amplify:deploy": "AWS_REGION=us-east-1 ampx deploy --identifier dev",
+    "amplify:deploy:backend": "AWS_REGION=us-east-1 ampx deploy --identifier dev --backend",
+    "amplify:deploy:backend:payments": "sh scripts/deploy-backend-payments.sh",
+    "amplify:deploy:frontend": "AWS_REGION=us-east-1 ampx deploy --identifier dev --frontend",
+    "amplify:deploy:pipeline": "AWS_REGION=us-east-1 ampx deploy --pipeline"
+  },
+  "dependencies": {
+    "@ag-ui/client": "^0.0.54",
+    "@assistant-ui/react": "^0.14.14",
+    "@assistant-ui/react-ag-ui": "^0.0.35",
+    "@aws-amplify/backend": "^0.0.0-iac-hosting-20260601123712",
+    "@aws-amplify/backend-cli": "^0.0.0-iac-hosting-20260601123712",
+    "@aws-amplify/hosting": "^0.0.0-iac-hosting-20260601123712",
+    "@aws-amplify/ui-react": "^6.15.4",
+    "@privy-io/react-auth": "^3.32.1",
+    "@x402/core": "^2.15.0",
+    "@x402/evm": "^2.15.0",
+    "@x402/next": "^2.15.0",
+    "aws-amplify": "^6.17.0",
+    "aws-cdk-lib": "latest",
+    "constructs": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "aws-cdk": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

@@ -18,8 +18,9 @@
   },
   "dependencies": {
     "@ag-ui/client": "^0.0.54",
-    "@assistant-ui/react": "^0.14.14",
+    "@assistant-ui/react": "^0.14.23",
     "@assistant-ui/react-ag-ui": "^0.0.35",
+    "@assistant-ui/react-markdown": "^0.14.4",
     "@aws-amplify/backend": "^0.0.0-iac-hosting-20260601123712",
     "@aws-amplify/backend-cli": "^0.0.0-iac-hosting-20260601123712",
     "@aws-amplify/hosting": "^0.0.0-iac-hosting-20260601123712",

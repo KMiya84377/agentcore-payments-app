@@ -397,18 +397,70 @@ h1 {
 }
 
 .tool-call {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
-  padding: 8px 10px;
+  padding: 0;
   color: var(--muted-strong);
   font-size: 0.82rem;
   white-space: normal;
   box-shadow: 0 8px 22px rgba(23, 26, 24, 0.04);
+}
+
+.tool-call-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tool-call-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-call-summary::after {
+  content: "+";
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tool-call[open] .tool-call-summary::after {
+  content: "−";
+}
+
+.tool-call-content {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+}
+
+.tool-call-content > div > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tool-call-content pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 9px;
+  color: var(--foreground);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .tool-call-dot {
@@ -438,6 +490,17 @@ h1 {
 
 .tool-call-error .tool-call-dot {
   background: var(--danger);
+}
+
+.message-error {
+  max-width: 680px;
+  border: 1px solid #efcaca;
+  border-radius: 8px;
+  background: #fff2f2;
+  padding: 10px 12px;
+  color: var(--danger);
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
 .authorization-card {

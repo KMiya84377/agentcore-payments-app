@@ -1,7 +1,6 @@
 import os
 import logging
 from pathlib import Path
-from typing import Any
 
 import uvicorn
 from ag_ui.core import RunAgentInput
@@ -18,15 +17,11 @@ from strands.models.bedrock import BedrockModel
 
 from request_context import RequestUser, current_user
 from tools.payments import (
-    create_payment_session,
     create_payment_instrument,
     create_payment_session_for_user,
     delete_payment_instrument,
     find_active_payment_instrument,
-    get_payment_instrument,
-    get_payment_instrument_balance,
-    list_payment_instruments,
-    request_wallet_authorization,
+    prepare_wallet_authorization,
 )
 
 
@@ -42,60 +37,15 @@ logging.basicConfig(
     format="%(levelname)s:%(name)s:%(message)s",
 )
 logging.getLogger("bedrock_agentcore.payments.integrations.strands.plugin").setLevel(
-    os.getenv("AGENTCORE_PAYMENTS_PLUGIN_LOG_LEVEL", "DEBUG"),
+    os.getenv("AGENTCORE_PAYMENTS_PLUGIN_LOG_LEVEL", "WARNING"),
 )
 logging.getLogger("bedrock_agentcore.payments.integrations.handlers").setLevel(
-    os.getenv("AGENTCORE_PAYMENTS_HANDLER_LOG_LEVEL", "DEBUG"),
+    os.getenv("AGENTCORE_PAYMENTS_HANDLER_LOG_LEVEL", "WARNING"),
 )
 logging.getLogger("bedrock_agentcore.payments.manager").setLevel(
     os.getenv("AGENTCORE_PAYMENTS_MANAGER_LOG_LEVEL", "INFO"),
 )
 logger = logging.getLogger("agentcore_payments_app")
-
-
-def sanitize_agui_history_for_bedrock(input_data: dict[str, Any]) -> dict[str, Any]:
-    """Remove historical AG-UI tool calls before replaying history to Bedrock."""
-    messages = input_data.get("messages")
-
-    if not isinstance(messages, list):
-        return input_data
-
-    normalized_messages: list[Any] = []
-
-    for message in messages:
-        if not isinstance(message, dict):
-            normalized_messages.append(message)
-            continue
-
-        role = message.get("role")
-
-        if role == "tool":
-            continue
-
-        if role != "assistant":
-            normalized_messages.append(message)
-            continue
-
-        sanitized_message = {
-            key: value
-            for key, value in message.items()
-            if key not in ("toolCalls", "tool_calls")
-        }
-        content = sanitized_message.get("content")
-
-        if isinstance(content, list):
-            sanitized_message["content"] = [
-                part
-                for part in content
-                if not (isinstance(part, dict) and part.get("type") == "tool-call")
-            ]
-
-        normalized_messages.append(sanitized_message)
-
-    return {
-        **input_data,
-        "messages": normalized_messages,
-    }
 
 
 def get_request_user(request: Request) -> RequestUser | None:
@@ -141,13 +91,13 @@ def create_payments_plugin(
         return None
 
     if not user:
-        logger.warning("payments_plugin disabled: user context missing")
+        logger.info("payments_plugin disabled: user context missing")
         return None
 
     instrument = find_active_payment_instrument(user.user_id)
 
     if not instrument:
-        logger.warning("payments_plugin disabled: active instrument not found")
+        logger.info("payments_plugin disabled: active instrument not found")
         return None
 
     payment_instrument_id = instrument.get("paymentInstrumentId")
@@ -163,7 +113,7 @@ def create_payments_plugin(
         logger.warning("payments_plugin disabled: payment session id missing")
         return None
 
-    logger.warning(
+    logger.debug(
         "payments_plugin enabled: instrument_present=%s session_present=%s connector_present=%s",
         bool(payment_instrument_id),
         bool(payment_session_id),
@@ -199,7 +149,7 @@ def create_agent(user: RequestUser | None = None) -> StrandsAgent:
     payments_plugin = create_payments_plugin(user)
     plugins = [payments_plugin] if payments_plugin else []
     hooks = list(payments_plugin.hooks) if payments_plugin else []
-    logger.warning(
+    logger.debug(
         "create_agent: payments_plugin_present=%s payment_hooks_count=%d paid_weather_api_present=%s",
         payments_plugin is not None,
         len(hooks),
@@ -210,13 +160,9 @@ def create_agent(user: RequestUser | None = None) -> StrandsAgent:
         model=model,
         system_prompt=load_system_prompt(),
         tools=[
-            list_payment_instruments,
-            get_payment_instrument,
             create_payment_instrument,
             delete_payment_instrument,
-            create_payment_session,
-            get_payment_instrument_balance,
-            request_wallet_authorization,
+            prepare_wallet_authorization,
         ],
         plugins=plugins,
     )
@@ -244,8 +190,7 @@ async def invocations(input_data: dict, request: Request):
 
         try:
             agui_agent = create_agent(user)
-            normalized_input = sanitize_agui_history_for_bedrock(input_data)
-            run_input = RunAgentInput(**normalized_input)
+            run_input = RunAgentInput(**input_data)
             async for event in agui_agent.run(run_input):
                 yield encoder.encode(event)
         finally:

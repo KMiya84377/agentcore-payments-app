@@ -41,26 +41,6 @@ def find_active_payment_instrument(user_id: str) -> dict | None:
     return None
 
 
-def find_detail_value(value: object, keys: set[str]) -> str | None:
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if key in keys and isinstance(item, str) and item:
-                return item
-
-        for item in value.values():
-            found = find_detail_value(item, keys)
-            if found:
-                return found
-
-    if isinstance(value, list):
-        for item in value:
-            found = find_detail_value(item, keys)
-            if found:
-                return found
-
-    return None
-
-
 def create_payment_session_for_user(
     user_id: str,
     max_spend_amount: str = "10.00",
@@ -80,94 +60,8 @@ def create_payment_session_for_user(
 
 
 @tool
-def list_payment_instruments() -> dict:
-    """List AgentCore Payments instruments for the current Cognito user."""
-    user = current_user.get()
-
-    if not user:
-        return {
-            "status": "error",
-            "message": "Authenticated Cognito user context is required.",
-        }
-
-    instruments = get_payment_manager().list_payment_instruments(
-        user_id=user.user_id,
-    )
-
-    return {
-        "status": "ok",
-        "userId": user.user_id,
-        "instruments": instruments,
-    }
-
-
-@tool
-def create_payment_session(
-    max_spend_amount: str = "10.00",
-    currency: str = "USD",
-    expiry_time_in_minutes: int = 60,
-) -> dict:
-    """Create a bounded AgentCore Payments session for the current Cognito user.
-
-    Args:
-        max_spend_amount: Maximum amount the session can spend.
-        currency: Currency code for the spending limit.
-        expiry_time_in_minutes: Session lifetime in minutes.
-    """
-    user = current_user.get()
-
-    if not user:
-        return {
-            "status": "error",
-            "message": "Authenticated Cognito user context is required.",
-        }
-
-    session = create_payment_session_for_user(
-        user_id=user.user_id,
-        max_spend_amount=max_spend_amount,
-        currency=currency,
-        expiry_time_in_minutes=expiry_time_in_minutes,
-    )
-
-    return {
-        "status": "created",
-        "userId": user.user_id,
-        "paymentSessionId": session.get("paymentSessionId"),
-        "session": session,
-    }
-
-
-@tool
-def get_payment_instrument(payment_instrument_id: str) -> dict:
-    """Get an AgentCore Payments instrument for the current Cognito user.
-
-    Args:
-        payment_instrument_id: PaymentInstrument ID to inspect.
-    """
-    user = current_user.get()
-
-    if not user:
-        return {
-            "status": "error",
-            "message": "Authenticated Cognito user context is required.",
-        }
-
-    instrument = get_payment_manager().get_payment_instrument(
-        user_id=user.user_id,
-        payment_instrument_id=payment_instrument_id,
-    )
-
-    return {
-        "status": "ok",
-        "userId": user.user_id,
-        "paymentInstrumentId": payment_instrument_id,
-        "instrument": instrument,
-    }
-
-
-@tool
-def request_wallet_authorization() -> dict:
-    """Request the frontend to let the current user authorize the active wallet signer."""
+def prepare_wallet_authorization() -> dict:
+    """Get the active wallet details needed by the frontend authorization tool."""
     user = current_user.get()
 
     if not user:
@@ -196,11 +90,10 @@ def request_wallet_authorization() -> dict:
         user_id=user.user_id,
         payment_instrument_id=payment_instrument_id,
     )
-    wallet_address = find_detail_value(
-        instrument,
-        {"walletAddress", "address"},
-    )
-    network = find_detail_value(instrument, {"network", "chain"})
+    instrument_details = instrument.get("paymentInstrumentDetails", {})
+    embedded_wallet = instrument_details.get("embeddedCryptoWallet", {})
+    wallet_address = embedded_wallet.get("walletAddress")
+    network = embedded_wallet.get("network")
 
     if not wallet_address:
         return {
@@ -210,7 +103,7 @@ def request_wallet_authorization() -> dict:
         }
 
     return {
-        "status": "authorization_required",
+        "status": "authorization_ready",
         "paymentInstrumentId": payment_instrument_id,
         "walletAddress": wallet_address,
         "network": network,
@@ -241,7 +134,6 @@ def delete_payment_instrument(payment_instrument_id: str) -> dict:
 
     return {
         "status": "deleted",
-        "userId": user.user_id,
         "paymentInstrumentId": payment_instrument_id,
         "result": result,
     }
@@ -286,52 +178,14 @@ def create_payment_instrument(
             "embeddedCryptoWallet": embedded_wallet,
         },
     )
+    instrument_details = instrument.get("paymentInstrumentDetails", {})
+    created_wallet = instrument_details.get("embeddedCryptoWallet", {})
 
     return {
         "status": "created",
-        "userId": user.user_id,
         "network": network,
         "paymentInstrumentId": instrument.get("paymentInstrumentId"),
         "instrumentStatus": instrument.get("status"),
-        "redirectUrl": instrument.get("redirectUrl"),
-        "raw": instrument,
-    }
-
-
-@tool
-def get_payment_instrument_balance(
-    payment_instrument_id: str,
-    chain: str = "BASE_SEPOLIA",
-    token: str = "USDC",
-) -> dict:
-    """Get the current balance for an AgentCore Payments instrument.
-
-    Args:
-        payment_instrument_id: PaymentInstrument ID to inspect.
-        chain: Chain to inspect, such as BASE_SEPOLIA, BASE, SOLANA_DEVNET, or SOLANA_MAINNET.
-        token: Token symbol to inspect, such as USDC.
-    """
-    user = current_user.get()
-
-    if not user:
-        return {
-            "status": "error",
-            "message": "Authenticated Cognito user context is required.",
-        }
-
-    balance = get_payment_manager().get_payment_instrument_balance(
-        user_id=user.user_id,
-        payment_connector_id=get_payment_connector_id(),
-        payment_instrument_id=payment_instrument_id,
-        chain=chain,
-        token=token,
-    )
-
-    return {
-        "status": "ok",
-        "userId": user.user_id,
-        "paymentInstrumentId": payment_instrument_id,
-        "chain": chain,
-        "token": token,
-        "balance": balance,
+        "walletAddress": created_wallet.get("walletAddress"),
+        "redirectUrl": created_wallet.get("redirectUrl"),
     }

@@ -42,6 +42,7 @@ function errorResponse(status: number, message: string, code: string) {
 }
 
 export async function POST(request: Request) {
+  
   if (!agentRuntimeArn) {
     return errorResponse(
       500,
@@ -59,10 +60,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const userSub = request.headers.get(AGENTCORE_USER_SUB_HEADER);
+  if (!userSub) {
+    return errorResponse(
+      401,
+      "User sub header is required.",
+      "USER_SUB_REQUIRED",
+    );
+  }
+
+  const userEmail = request.headers.get(AGENTCORE_USER_EMAIL_HEADER);
+  if (!userEmail) {
+    return errorResponse(
+      401,
+      "User email header is required.",
+      "USER_EMAIL_REQUIRED",
+    );
+  }
+
   try {
     const body = await request.json();
-    const userSub = request.headers.get(AGENTCORE_USER_SUB_HEADER);
-    const userEmail = request.headers.get(AGENTCORE_USER_EMAIL_HEADER);
     const agentUrl = `${agentCoreBaseUrl}/runtimes/${encodeURIComponent(
       agentRuntimeArn,
     )}/invocations?qualifier=${encodeURIComponent(qualifier)}`;
@@ -73,13 +90,8 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
     });
 
-    if (userSub) {
-      headers.set(AGENTCORE_USER_SUB_HEADER, userSub);
-    }
-
-    if (userEmail) {
-      headers.set(AGENTCORE_USER_EMAIL_HEADER, userEmail);
-    }
+    headers.set(AGENTCORE_USER_SUB_HEADER, userSub);
+    headers.set(AGENTCORE_USER_EMAIL_HEADER, userEmail);
 
     const response = await fetch(agentUrl, {
       method: "POST",

@@ -1,7 +1,7 @@
 "use client";
 
 import { type Toolkit } from "@assistant-ui/react";
-import { WalletAuthorizationTool } from "./payment-tool-ui";
+import { WalletAuthorizationTool } from "./payment-tools/wallet-authorization-tool";
 
 export const paymentToolkit: Toolkit = {
   request_wallet_authorization: {

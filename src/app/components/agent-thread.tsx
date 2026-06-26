@@ -11,7 +11,7 @@ import {
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import remarkGfm from "remark-gfm";
-import { PaymentToolCall } from "./payment-tool-ui";
+import { PaymentToolCall } from "./payment-tools/payment-tool-call";
 
 function AssistantMarkdown() {
   return (

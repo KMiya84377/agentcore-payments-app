@@ -1,4 +1,4 @@
-import { AgentAssistant } from "./components/agent-assistant";
+import { AgentAssistant } from "./components/AgentAssistant";
 
 export const dynamic = "force-dynamic";
 

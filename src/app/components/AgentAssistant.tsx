@@ -1,7 +1,7 @@
 "use client";
 
-import { AgentAssistantRuntimeProvider } from "./assistant-runtime-provider";
-import { AgentThread } from "./agent-thread";
+import { AgentAssistantRuntimeProvider } from "./AssistantRuntimeProvider";
+import { AgentThread } from "./AgentThread";
 
 export function AgentAssistant() {
   return (

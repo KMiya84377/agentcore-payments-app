@@ -6,12 +6,12 @@ import {
   ErrorPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-  useMessage,
+  useAuiState,
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import remarkGfm from "remark-gfm";
-import { PaymentToolCall } from "./payment-tools/payment-tool-call";
+import { PaymentToolCall } from "./payment-tools/PaymentToolCall";
 
 function AssistantMarkdown() {
   return (
@@ -23,7 +23,9 @@ function AssistantMarkdown() {
 }
 
 function AssistantLoading() {
-  const shouldShow = useMessage((message) => {
+  const shouldShow = useAuiState((state) => {
+    const message = state.message;
+
     if (message.status?.type !== "running") return false;
 
     return !message.content.some((part) => {

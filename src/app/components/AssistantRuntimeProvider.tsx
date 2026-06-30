@@ -9,7 +9,7 @@ import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
 import { HttpAgent } from "@ag-ui/client";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { type ReactNode, useMemo } from "react";
-import { paymentToolkit } from "./payment-toolkit";
+import { paymentToolkit } from "./paymentToolkit";
 
 const AGENTCORE_USER_SUB_HEADER =
   "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Sub";

@@ -1,44 +1,8 @@
 # AgentCore Payments App
 
-Next.js frontend, Amplify Auth, Amplify IaC Hosting, AgentCore Strands Python
-runtime, and Bedrock AgentCore Payments — managed as a single Amplify Gen2
-application.
+Amazon Bedrock AgentCore Payments を使って、AI エージェントが自律的に決済を実行するデモアプリです。
 
-```text
-.
-├── amplify/
-│   ├── auth/resource.ts
-│   ├── backend.ts
-│   ├── pipeline.ts
-│   ├── hosting.ts
-│   └── agent-core-stack.ts
-├── agent-runtime/
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── app.py
-│   ├── request_context.py
-│   ├── prompts/
-│   └── tools/
-├── src/app/
-│   ├── api/
-│   │   ├── agent/route.ts
-│   │   └── paid/weather/route.ts
-│   ├── components/
-│   │   ├── AgentAssistant.tsx
-│   │   ├── AgentThread.tsx
-│   │   ├── AssistantRuntimeProvider.tsx
-│   │   ├── paymentToolkit.ts
-│   │   └── payment-tools/
-│   │       ├── PaymentToolCall.tsx
-│   │       └── WalletAuthorizationTool.tsx
-│   └── providers/
-│       ├── AmplifyAuthProvider.tsx
-│       └── PrivyAppProvider.tsx
-├── scripts/
-├── cdk.json
-└── package.json
-```
+ユーザーが Privy ウォレットを承認すると、エージェントは x402 プロトコルで有料 API を呼び出し、USDC マイクロペイメントを自動処理します。Stripe（Privy）と Coinbase CDP の両ベンダーに対応しています。
 
 ## Architecture
 
@@ -47,19 +11,57 @@ Browser
   -> Amplify Auth (Cognito)
   -> assistant-ui / AG-UI HttpAgent
   -> Next.js /api/agent
-  -> AgentCore Runtime HTTPS endpoint
-  -> Strands Python AG-UI runtime
-       -> AgentCore Payments Plugin
-            -> /api/paid/weather (x402 paid endpoint)
+  -> AgentCore Runtime (Strands Python)
+       -> AgentCore Payments Plugin (Stripe/Coinbase)
+            -> /api/paid/weather  (x402 paid endpoint, $0.001 USDC)
 ```
 
-`/api/agent` forwards the Cognito access token as
-`Authorization: Bearer <accessToken>` and the Cognito `sub` and email as
-AgentCore custom headers. AgentCore Runtime validates the token via the
-Cognito/JWT authorizer and uses the `sub` as the Payments `user_id`.
+- **認証**: Cognito JWT を AgentCore Runtime に転送し、Cognito `sub` を Payments の `user_id` として使用
+- **ウォレット承認**: チャット内の `WalletAuthorizationTool` で Privy `addSigners()` を実行し、エージェントへの署名権限を付与
+- **決済フロー**: エージェントが x402 の `402 Payment Required` を受け取ると、Payments Plugin が自動的に USDC 決済を処理して再リクエスト
 
-The frontend uses Privy for wallet authorization. `WalletAuthorizationTool`
-handles the in-chat `addSigners()` flow so the agent can initiate x402 payments.
+## Repository Structure
+
+```text
+.
+├── amplify/
+│   ├── auth/resource.ts          # Cognito 設定
+│   ├── backend.ts
+│   ├── hosting.ts
+│   ├── pipeline.ts
+│   └── agent-core-stack.ts       # AgentCore Runtime + Payments CDK 定義
+├── agent-runtime/
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── app.py                    # FastAPI + Strands AG-UI エントリーポイント
+│   ├── request_context.py
+│   ├── prompts/system_prompt.md
+│   └── tools/payments.py         # PaymentInstrument / Session 操作ツール
+├── src/app/
+│   ├── api/
+│   │   ├── agent/route.ts        # AgentCore Runtime へのプロキシ
+│   │   └── paid/weather/route.ts # x402 保護の有料テスト API
+│   ├── components/
+│   │   ├── AgentAssistant.tsx
+│   │   ├── AgentThread.tsx
+│   │   ├── AssistantRuntimeProvider.tsx
+│   │   ├── paymentToolkit.ts
+│   │   └── payment-tools/
+│   │       ├── PaymentToolCall.tsx
+│   │       └── WalletAuthorizationTool.tsx
+│   ├── providers/
+│   │   ├── AmplifyAuthProvider.tsx
+│   │   └── PrivyAppProvider.tsx
+│   └── providers.tsx
+├── scripts/
+│   ├── sandbox-payments.sh
+│   ├── deploy-backend-payments.sh
+│   ├── resolve-payment-credential-provider-arn.py
+│   └── resolve-payment-service-role-name.py
+├── cdk.json
+└── package.json
+```
 
 ## Local Checks
 
@@ -70,15 +72,13 @@ npm run agent:typecheck
 npm run agent:build
 ```
 
-The Python Agent Runtime is managed by `uv`. Install `uv` before running agent
-checks or building the Docker image.
+Python Agent Runtime は `uv` で管理しています。agent コマンドの実行前に `uv` をインストールしてください。
 
 ## Environment Variables
 
 ### `.env.local` — Next.js API
 
-Used for local development. For deployed hosting, set these as Amplify Hosting
-environment variables.
+ローカル開発時は `.env.local` に設定します。デプロイ済み hosting では Amplify Hosting の環境変数として設定します。
 
 ```bash
 AGENTCORE_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/YourRuntimeName
@@ -90,21 +90,13 @@ NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
 NEXT_PUBLIC_PRIVY_SIGNER_ID=your-privy-key-quorum-id
 ```
 
-`NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_PRIVY_SIGNER_ID` are public
-identifiers used by the in-chat wallet authorization UI. Do not expose the
-Privy App Secret or Authorization Private Key to the frontend.
+`NEXT_PUBLIC_PRIVY_APP_ID` と `NEXT_PUBLIC_PRIVY_SIGNER_ID` はチャット内のウォレット承認 UI が使う公開識別子です。Privy App Secret と Authorization Private Key はフロントエンドに設定しません。
 
-`AGENTCORE_BASE_URL` is optional. If omitted, `/api/agent` defaults to
-`https://bedrock-agentcore.${AWS_REGION}.amazonaws.com`.
+`AGENTCORE_BASE_URL` は任意です。未設定の場合 `/api/agent` は `https://bedrock-agentcore.${AWS_REGION}.amazonaws.com` を使います。
 
 ### `backend.env` — AgentCore Runtime Deploy
 
-For Payments-enabled backend deploys only. This file contains real connector
-values and is ignored by git. Create it locally before running Payments scripts:
-
-```bash
-cp backend.env.example backend.env   # backend.env.example is also gitignored — create manually
-```
+Payments 有効の backend deploy 時のみ必要です。実際の connector 値を含むため git から除外しています。実行前に手動で作成してください。
 
 ```env
 AWS_REGION=us-east-1
@@ -114,47 +106,42 @@ PAYMENT_CONNECTOR_ID=your-payment-connector-id
 PAID_WEATHER_API_URL=https://your-public-domain.example.com/api/paid/weather
 ```
 
-`PAYMENT_USER_ID`, `PAYMENT_INSTRUMENT_ID`, and `PAYMENT_SESSION_ID` are
-not set here — the runtime resolves them dynamically at request time using the
-Cognito `sub` header.
+`PAYMENT_USER_ID`・`PAYMENT_INSTRUMENT_ID`・`PAYMENT_SESSION_ID` は設定不要です。Runtime がリクエストごとに Cognito `sub` を `user_id` として使い、動的に解決します。
 
 ## x402 Paid Test API
 
 ```text
 GET /api/paid/weather
-Price:     $0.001
-Network:   Base Sepolia (eip155:84532)
+Price:      $0.001 USDC
+Network:    Base Sepolia (eip155:84532)
 Facilitator: https://x402.org/facilitator (default)
 ```
 
-Protected by `@x402/next` `withX402`. Unpaid requests receive
-`402 Payment Required`. After a valid x402 payment, it returns fixed weather
-JSON. Purpose: end-to-end validation of AgentCore Payments and the Strands
-Payments Plugin.
+`@x402/next` の `withX402` で保護されています。未払いリクエストには `402 Payment Required` を返し、有効な x402 payment がある場合のみ固定の天気 JSON を返します。AgentCore Payments と Strands Payments Plugin の E2E 疎通確認用エンドポイントです。
 
-To test from the deployed AgentCore Runtime:
+デプロイ済み Runtime から検証する手順:
 
-1. Set `X402_PAY_TO_ADDRESS` in Amplify Hosting environment variables.
-2. Deploy the frontend.
-3. Set `PAID_WEATHER_API_URL` in `backend.env` to the deployed URL.
-4. Redeploy the backend: `npm run amplify:deploy:backend:payments`.
-5. Ask the agent to call the paid weather API after explicitly approving the payment.
+1. Amplify Hosting の環境変数に `X402_PAY_TO_ADDRESS` を設定
+2. frontend をデプロイ
+3. `backend.env` の `PAID_WEATHER_API_URL` にデプロイ後の URL を設定
+4. `npm run amplify:deploy:backend:payments` で backend を再デプロイ
+5. チャットで支払い検証を明示的に許可し、エージェントに有料天気 API を呼ばせる
 
 ## Local Development
 
-Start the Amplify sandbox (Payments disabled):
+Sandbox 起動（Payments なし）:
 
 ```bash
 npx ampx sandbox --identifier dev
 ```
 
-With Payments enabled:
+Payments 有効の場合（`backend.env` 要）:
 
 ```bash
 npm run amplify:sandbox:payments
 ```
 
-Start the Next.js dev server separately:
+Next.js dev server を別ターミナルで起動:
 
 ```bash
 npm run dev
@@ -162,33 +149,21 @@ npm run dev
 
 ## Deploy
 
-Deploy backend only:
-
 ```bash
+# backend のみ
 npm run amplify:deploy:backend
-```
 
-Deploy backend with Payments (requires `backend.env`):
-
-```bash
+# backend + Payments（backend.env 要）
 npm run amplify:deploy:backend:payments
-```
 
-Deploy frontend only:
-
-```bash
+# frontend のみ
 npm run amplify:deploy:frontend
-```
 
-Deploy both:
-
-```bash
+# 両方
 npm run amplify:deploy
 ```
 
 ## Pipeline
-
-Requires a CodeConnections connection ARN and the GitHub repository name:
 
 ```bash
 GITHUB_REPOSITORY_NAME=owner/repo \
@@ -198,9 +173,7 @@ npm run amplify:deploy:pipeline
 
 ## Migration Note
 
-An older standalone CDK stack may already contain an AgentCore Runtime named
-`StrandsAgentRuntime`. The Amplify backend defines a Runtime with the same
-name. Before deploying, choose one path:
+既存の standalone CDK stack に `StrandsAgentRuntime` という AgentCore Runtime が存在する場合、この Amplify backend と名前が衝突します。デプロイ前に次のどちらかを選択してください。
 
-- **Option A** — Delete the old standalone stack, then deploy this Amplify backend.
-- **Option B** — Change `runtimeName` in `amplify/agent-core-stack.ts` to avoid the name collision.
+- **Option A** — 古い standalone stack を削除してからデプロイ
+- **Option B** — `amplify/agent-core-stack.ts` の `runtimeName` を変更して別名で作成
